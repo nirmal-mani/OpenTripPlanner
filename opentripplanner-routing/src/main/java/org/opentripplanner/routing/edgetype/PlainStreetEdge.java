@@ -80,6 +80,9 @@ public class PlainStreetEdge extends StreetEdge implements Cloneable {
      * This street is a staircase
      */
     private boolean stairs;
+    
+    /** The speed in meters per second that an automobile can traverse this street segment at */
+    private float carSpeed;
 
     private Set<Alert> wheelchairNotes;
 
@@ -97,11 +100,18 @@ public class PlainStreetEdge extends StreetEdge implements Cloneable {
         super(null, null);
     }
 
+    public PlainStreetEdge(StreetVertex v1, StreetVertex v2, LineString geometry, 
+            String name, double length,
+            StreetTraversalPermission permission, boolean back) {
+        // use a default car speed of ~25 mph for splitter vertices and the like
+        this(v1, v2, geometry, name, length, permission, back, 11.2f);
+    }
+    
     // Presently, we have plainstreetedges that connect both IntersectionVertexes and
     // TurnVertexes
     public PlainStreetEdge(StreetVertex v1, StreetVertex v2, LineString geometry, 
             String name, double length,
-            StreetTraversalPermission permission, boolean back) {
+            StreetTraversalPermission permission, boolean back, float carSpeed) {
         super(v1, v2);
         this.geometry = geometry;
         this.length = length;
@@ -109,6 +119,7 @@ public class PlainStreetEdge extends StreetEdge implements Cloneable {
         this.name = name;
         this.permission = permission;
         this.back = back;
+        this.carSpeed = carSpeed;
         if (geometry != null) {
             for (Coordinate c : geometry.getCoordinates()) {
                 if (Double.isNaN(c.x)) {
@@ -209,7 +220,15 @@ public class PlainStreetEdge extends StreetEdge implements Cloneable {
             }
             return null;
         }
-        double speed = options.getSpeed(s0.getNonTransitMode(options));
+        
+        double speed;
+        
+        // Automobiles have variable speeds depending on the edge type
+        if (traverseMode == TraverseMode.CAR)
+            speed = this.calculateCarSpeed(options);
+        else
+            speed = options.getSpeed(s0.getNonTransitMode(options));
+        
         double time = length / speed;
         double weight;
         if (options.wheelchairAccessible) {
@@ -312,11 +331,17 @@ public class PlainStreetEdge extends StreetEdge implements Cloneable {
                 turnCost = 360 - turnCost;
             }
             final double realTurnCost = (turnCost / 20.0) / options.getSpeed(traverseMode);
-            s1.incrementWalkDistance(realTurnCost / 100); //just a tie-breaker
+            
+            if (traverseMode != TraverseMode.CAR) 
+                s1.incrementWalkDistance(realTurnCost / 100); //just a tie-breaker
+            
             weight += realTurnCost;
             time += Math.ceil(realTurnCost);
         }
-        s1.incrementWalkDistance(length);
+        
+        if (traverseMode != TraverseMode.CAR)
+            s1.incrementWalkDistance(length);
+        
         s1.incrementTimeInSeconds((int) Math.ceil(time));
         s1.incrementWeight(weight);
         if (s1.weHaveWalkedTooFar(options))
@@ -325,6 +350,14 @@ public class PlainStreetEdge extends StreetEdge implements Cloneable {
         s1.addAlerts(getNotes());
 
         return s1.makeState();
+    }
+
+    /**
+     * Calculate the average automobile traversal speed of this segment, given the RoutingRequest,
+     * and return it in meters per second.
+     */
+    private double calculateCarSpeed(RoutingRequest options) {
+        return this.carSpeed;
     }
 
     @Override
@@ -512,5 +545,13 @@ public class PlainStreetEdge extends StreetEdge implements Cloneable {
     @Override
     public ElevationProfileSegment getElevationProfileSegment() {
         return elevationProfileSegment;
+    }
+
+    public void setCarSpeed(float carSpeed) {
+        this.carSpeed = carSpeed;         
+    }
+    
+    public float getCarSpeed() {
+        return carSpeed;
     }
 }
