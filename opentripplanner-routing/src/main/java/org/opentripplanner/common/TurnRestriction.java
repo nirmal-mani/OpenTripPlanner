@@ -23,5 +23,21 @@ public class TurnRestriction implements Serializable {
     public TurnRestrictionType type;
     public Edge from;
     public Edge to;
+    public RepeatingTimePeriod time;
     public TraverseModeSet modes;
+    
+    public TurnRestriction () {
+        time = null;
+    }
+    
+    /**
+     * Return true if the turn restriction is in force at the time described by the long.
+     * @param time
+     * @return
+     */
+    public boolean active(long time) {
+        if (this.time != null)
+            return this.time.active(time);
+        return true;
+    }
 }
